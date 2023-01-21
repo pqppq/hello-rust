@@ -3,5 +3,5 @@
 version = 3
 
 [[package]]
-name = "regex-engine"
+name = "regex"
 version = "0.1.0"
