@@ -118,6 +118,10 @@ fn eval_width(insts: &[Instruction], line: &[char]) -> Result<bool, EvalError> {
             return Err(EvalError::InvalidPC);
         };
 
+        if sp > line.len() {
+            return Ok(false)
+        }
+
         match next {
             Instruction::Char(c) => {
                 if let Some(sp_c) = line.get(sp) {
