@@ -8,7 +8,7 @@ use std::{
 /// AST type
 #[derive(Debug, PartialEq, Eq)]
 pub enum AST {
-    Char(char),             // one character
+    Char(char),             // a character
     Plus(Box<AST>),         // +
     Star(Box<AST>),         // *
     Question(Box<AST>),     // ?
@@ -141,7 +141,7 @@ pub fn parse(expr: &str) -> Result<AST, ParseError> {
                             seq = prev;
                             seq_or = prev_or;
                         } else {
-                            // return Err(ParseError::InvalidRightParen(i));
+                            return Err(ParseError::InvalidRightParen(i));
                         }
                     }
                     '|' => {
@@ -214,12 +214,23 @@ mod tests {
         );
         assert_eq!(expect, parse(expr).unwrap());
 
+        let expr: &str = "|";
+        assert!(parse(expr).is_err());
+
+        let expr: &str = "+";
+        assert!(parse(expr).is_err());
+
+        let expr: &str = "*";
+        assert!(parse(expr).is_err());
+
+        let expr: &str = "?";
+        assert!(parse(expr).is_err());
+
         // complex cases
         let expr: &str = "(a*)*";
-        let expect: AST = AST::Seq(
-            vec![AST::Star(Box::new(AST::Seq(
-                        vec![AST::Star(Box::new(AST::Char('a')))]
-                    )))]);
+        let expect: AST = AST::Seq(vec![AST::Star(Box::new(AST::Seq(vec![AST::Star(
+            Box::new(AST::Char('a')),
+        )])))]);
         assert_eq!(expect, parse(expr).unwrap());
     }
 }

@@ -83,9 +83,10 @@ impl Generator {
 
     /// generate instruction from Char
     fn gen_char(&mut self, c: char) -> Result<(), CodeGenError> {
-        let insts = Instruction::Char(c);
-        self.insts.push(insts);
+        let inst = Instruction::Char(c);
+        self.insts.push(inst);
         self.inc_pc()?;
+
         Ok(())
     }
 
@@ -127,7 +128,7 @@ impl Generator {
         if let Some(Instruction::Jump(l3)) = self.insts.get_mut(jump_addr) {
             *l3 = self.pc;
         } else {
-            return Err(CodeGenError::FailOr)
+            return Err(CodeGenError::FailOr);
         }
 
         Ok(())

@@ -58,7 +58,7 @@ fn eval_depth(
                 if let Some(sp_c) = line.get(sp) {
                     if c == sp_c {
                         safe_add(&mut pc, &1, || EvalError::PCOverFlow)?;
-                        safe_add(&mut sp, &1, || EvalError::PCOverFlow)?;
+                        safe_add(&mut sp, &1, || EvalError::SPOverFlow)?;
                     } else {
                         return Ok(false);
                     }

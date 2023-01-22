@@ -5,7 +5,7 @@ mod parser;
 use crate::helper::DynError;
 use std::fmt::{self, Display};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Instruction {
     Char(char),
     Match,
