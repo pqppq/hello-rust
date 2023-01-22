@@ -60,6 +60,7 @@ impl Generator {
 
     fn gen_expr(&mut self, ast: &AST) -> Result<(), CodeGenError> {
         match ast {
+            AST::Dot => self.gen_any()?,
             AST::Char(c) => self.gen_char(*c)?,
             AST::Or(e1, e2) => self.gen_or(e1, e2)?,
             AST::Plus(e) => self.gen_plus(e)?,
@@ -77,6 +78,24 @@ impl Generator {
             AST::Question(e) => self.gen_question(e)?,
             AST::Seq(v) => self.gen_seq(v)?,
         }
+
+        Ok(())
+    }
+
+    /// generate instruction from Char
+    /// ```text
+    /// L1: split L2, L3
+    /// L2: jump L1
+    /// L3:
+    /// ```
+    fn gen_any(&mut self) -> Result<(), CodeGenError> {
+        // let split_addr = self.pc;
+        // let inst = Instruction::Split(split_addr, split_addr + 2);
+        // self.insts.push(inst);
+        // self.inc_pc()?;
+        let inst = Instruction::Any;
+        self.insts.push(inst);
+        self.inc_pc()?;
 
         Ok(())
     }

@@ -13,6 +13,7 @@ pub enum AST {
     Star(Box<AST>),         // *
     Question(Box<AST>),     // ?
     Or(Box<AST>, Box<AST>), // |
+    Dot,                    // .
     Seq(Vec<AST>),          // sequence of regex
 }
 
@@ -54,6 +55,15 @@ impl Display for ParseError {
 }
 
 impl Error for ParseError {}
+
+/// transform .
+fn parse_dot(
+    seq: &mut Vec<AST>,
+) -> Result<(), ParseError> {
+    let ast = AST::Dot;
+    seq.push(ast);
+    Ok(())
+}
 
 /// transform + * ? into AST
 fn parse_plus_star_question(
@@ -116,6 +126,7 @@ pub fn parse(expr: &str) -> Result<AST, ParseError> {
         match &state {
             ParseState::Char => {
                 match c {
+                    '.' => parse_dot(&mut seq)?,
                     '+' => parse_plus_star_question(&mut seq, PSQ::Plus, i)?,
                     '*' => parse_plus_star_question(&mut seq, PSQ::Star, i)?,
                     '?' => parse_plus_star_question(&mut seq, PSQ::Question, i)?,

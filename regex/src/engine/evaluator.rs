@@ -53,6 +53,10 @@ fn eval_depth(
             return Err(EvalError::InvalidPC);
         };
 
+        if sp > line.len() {
+            return Ok(false)
+        }
+
         match next {
             Instruction::Char(c) => {
                 if let Some(sp_c) = line.get(sp) {
@@ -66,10 +70,16 @@ fn eval_depth(
                     return Ok(false);
                 }
             }
+            Instruction::Any => {
+                safe_add(&mut pc, &1, || EvalError::PCOverFlow)?;
+                safe_add(&mut sp, &1, || EvalError::SPOverFlow)?;
+            }
             Instruction::Match => {
                 return Ok(true);
             }
-            Instruction::Jump(addr) => pc = *addr,
+            Instruction::Jump(addr) => {
+                pc = *addr
+            }
             Instruction::Split(addr1, addr2) => {
                 if eval_depth(insts, line, *addr1, sp)? || eval_depth(insts, line, *addr2, sp)? {
                     return Ok(true);
@@ -96,10 +106,7 @@ fn pop_ctx(
 }
 
 /// recursive matching using BFS(breadth first search)
-fn eval_width(
-    insts: &[Instruction],
-    line: &[char],
-) -> Result<bool, EvalError> {
+fn eval_width(insts: &[Instruction], line: &[char]) -> Result<bool, EvalError> {
     let mut ctx = VecDeque::new();
     let mut pc = 0;
     let mut sp = 0;
@@ -116,7 +123,7 @@ fn eval_width(
                 if let Some(sp_c) = line.get(sp) {
                     if c == sp_c {
                         safe_add(&mut pc, &1, || EvalError::PCOverFlow)?;
-                        safe_add(&mut sp, &1, || EvalError::PCOverFlow)?;
+                        safe_add(&mut sp, &1, || EvalError::SPOverFlow)?;
                     } else {
                         if ctx.is_empty() {
                             return Ok(false);
@@ -132,10 +139,16 @@ fn eval_width(
                     }
                 }
             }
+            Instruction::Any => {
+                safe_add(&mut pc, &1, || EvalError::PCOverFlow)?;
+                safe_add(&mut sp, &1, || EvalError::SPOverFlow)?;
+            }
             Instruction::Match => {
                 return Ok(true);
             }
-            Instruction::Jump(addr) => pc = *addr,
+            Instruction::Jump(addr) => {
+                pc = *addr
+            }
             Instruction::Split(addr1, addr2) => {
                 pc = *addr1;
                 ctx.push_back((*addr2, sp));

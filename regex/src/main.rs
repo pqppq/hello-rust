@@ -77,10 +77,17 @@ mod tests {
         assert!(do_matching("abc?", "ab", true).unwrap());
         assert!(do_matching("((((a*)*)*)*)", "aaaaaaaaa", true).unwrap());
         assert!(do_matching("(a*)*b", "aaaaaaaaab", true).unwrap());
+        assert!(do_matching("a.c", "axc", true).unwrap());
+        assert!(do_matching("a.+b", "a123b", true).unwrap());
+        assert!(do_matching("a.?", "ab", true).unwrap());
+        assert!(do_matching("a.*", "a", true).unwrap());
+        assert!(do_matching("a.*", "ab", true).unwrap());
 
         // parse: success, match: fail
         assert!(!do_matching("abc|def", "efa", true).unwrap());
         assert!(!do_matching("(ab|cd)+", "", true).unwrap());
         assert!(!do_matching("abc?", "acb", true).unwrap());
+        assert!(!do_matching("a.", "a", true).unwrap());
+        assert!(!do_matching("a.+b", "aaaaaac", true).unwrap());
     }
 }
