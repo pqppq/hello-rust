@@ -58,6 +58,18 @@ fn eval_depth(
         }
 
         match next {
+            Instruction::First => {
+                if sp != 0 {
+                    return Ok(false);
+                }
+                safe_add(&mut pc, &1, || EvalError::PCOverFlow)?;
+            }
+            Instruction::Last => {
+                if sp != line.len() {
+                    return Ok(false);
+                }
+                return Ok(true)
+            }
             Instruction::Char(c) => {
                 if let Some(sp_c) = line.get(sp) {
                     if c == sp_c {
@@ -123,6 +135,18 @@ fn eval_width(insts: &[Instruction], line: &[char]) -> Result<bool, EvalError> {
         }
 
         match next {
+            Instruction::First => {
+                if sp != 0 {
+                    return Ok(false);
+                }
+                safe_add(&mut pc, &1, || EvalError::PCOverFlow)?;
+            }
+            Instruction::Last => {
+                if sp != line.len() {
+                    return Ok(false);
+                }
+                return Ok(true)
+            }
             Instruction::Char(c) => {
                 if let Some(sp_c) = line.get(sp) {
                     if c == sp_c {

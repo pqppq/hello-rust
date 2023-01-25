@@ -7,6 +7,8 @@ use std::fmt::{self, Display};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Instruction {
+    First,
+    Last,
     Any,
     Char(char),
     Match,
@@ -17,6 +19,8 @@ pub enum Instruction {
 impl Display for Instruction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Instruction::First => write!(f, "first"),
+            Instruction::Last => write!(f, "last"),
             Instruction::Char(c) => write!(f, "char {}", c),
             Instruction::Any => write!(f, "any"),
             Instruction::Match => write!(f, "match"),

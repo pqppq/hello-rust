@@ -14,6 +14,8 @@ pub enum AST {
     Question(Box<AST>),     // ?
     Or(Box<AST>, Box<AST>), // |
     Dot,                    // .
+    Caret,                  // ^
+    Daller,                 // $
     Seq(Vec<AST>),          // sequence of regex
 }
 
@@ -56,7 +58,25 @@ impl Display for ParseError {
 
 impl Error for ParseError {}
 
-/// transform .
+/// transform ^ into AST
+fn parse_caret(
+    seq: &mut Vec<AST>,
+) -> Result<(), ParseError> {
+    let ast = AST::Caret;
+    seq.push(ast);
+    Ok(())
+}
+
+/// transform $ into AST
+fn parse_daller(
+    seq: &mut Vec<AST>,
+) -> Result<(), ParseError> {
+    let ast = AST::Daller;
+    seq.push(ast);
+    Ok(())
+}
+
+/// transform . into AST
 fn parse_dot(
     seq: &mut Vec<AST>,
 ) -> Result<(), ParseError> {
@@ -126,6 +146,8 @@ pub fn parse(expr: &str) -> Result<AST, ParseError> {
         match &state {
             ParseState::Char => {
                 match c {
+                    '^' => parse_caret(&mut seq)?,
+                    '$' => parse_daller(&mut seq)?,
                     '.' => parse_dot(&mut seq)?,
                     '+' => parse_plus_star_question(&mut seq, PSQ::Plus, i)?,
                     '*' => parse_plus_star_question(&mut seq, PSQ::Star, i)?,

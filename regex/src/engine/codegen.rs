@@ -60,6 +60,8 @@ impl Generator {
 
     fn gen_expr(&mut self, ast: &AST) -> Result<(), CodeGenError> {
         match ast {
+            AST::Caret => self.gen_caret()?,
+            AST::Daller => self.gen_daller()?,
             AST::Dot => self.gen_any()?,
             AST::Char(c) => self.gen_char(*c)?,
             AST::Or(e1, e2) => self.gen_or(e1, e2)?,
@@ -89,11 +91,25 @@ impl Generator {
     /// L3:
     /// ```
     fn gen_any(&mut self) -> Result<(), CodeGenError> {
-        // let split_addr = self.pc;
-        // let inst = Instruction::Split(split_addr, split_addr + 2);
-        // self.insts.push(inst);
-        // self.inc_pc()?;
         let inst = Instruction::Any;
+        self.insts.push(inst);
+        self.inc_pc()?;
+
+        Ok(())
+    }
+
+    /// generate instruction from Char
+    fn gen_caret(&mut self) -> Result<(), CodeGenError> {
+        let inst = Instruction::First;
+        self.insts.push(inst);
+        self.inc_pc()?;
+
+        Ok(())
+    }
+
+    /// generate instruction from Char
+    fn gen_daller(&mut self) -> Result<(), CodeGenError> {
+        let inst = Instruction::Last;
         self.insts.push(inst);
         self.inc_pc()?;
 
