@@ -424,7 +424,7 @@ impl Worker {
 
         if cmd.len() == 2 {
             // create second process
-            match fork_exec(Pid::from_raw(1), cmd[1].0, &cmd[1].1, input, None) {
+            match fork_exec(pgid, cmd[1].0, &cmd[1].1, input, None) {
                 Ok(child) => {
                     pids.insert(child, info);
                 }
