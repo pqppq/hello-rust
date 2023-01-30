@@ -1,6 +1,6 @@
 use crate::helper::DynError;
 use nix::{
-    libc,
+    fcntl, libc,
     sys::{
         signal::{killpg, signal, SigHandler, Signal},
         wait::{waitpid, WaitPidFlag, WaitStatus},
@@ -95,7 +95,7 @@ impl Shell {
             // read line and send to worker
             let face = if prev == 0 { '\u{1F642}' } else { '\u{1F480}' };
 
-            match rl.readline(&format!("{face} %> ")) {
+            match rl.readline(&format!("{face}> ")) {
                 Ok(line) => {
                     let line_trimed = line.trim();
                     if line_trimed.is_empty() {
@@ -368,9 +368,8 @@ impl Worker {
         }
     }
 
-    fn spawn_child(&mut self, line: &str, cmd: &[(&str, Vec<&str>)]) -> bool {
-        assert_ne!(cmd.len(), 0);
-
+    fn spawn_child(&mut self, line: &str, cmds: &[(&str, Vec<&str>, &str, &str)]) -> bool {
+        assert_ne!(cmds.len(), 0);
         let job_id = if let Some(id) = self.get_new_job_id() {
             id
         } else {
@@ -378,39 +377,77 @@ impl Worker {
             return false;
         };
 
-        if cmd.len() > 2 {
-            eprintln!("unsupported pipe length {}", cmd.len());
-            return false;
-        }
-
-        let mut input = None; // input for second process
-        let mut output = None; // output for first process
-        if cmd.len() == 2 {
-            // creat pipe
-            let p = pipe().unwrap();
-            input = Some(p.0);
-            output = Some(p.1);
-        }
-
-        let cleanup_pipe = CleanUp {
-            f: || {
-                if let Some(fd) = input {
+        let cleanup_pipe = |pipes: Vec<Option<i32>>| {
+            for pipe in pipes {
+                if let Some(fd) = pipe {
                     syscall(|| unistd::close(fd)).unwrap();
                 }
-                if let Some(fd) = output {
-                    syscall(|| unistd::close(fd)).unwrap();
+            }
+        };
+
+        let file_open = |filename: &str, flag: fcntl::OFlag| -> Option<i32> {
+            // open input file
+            match fcntl::open(filename, flag, nix::sys::stat::Mode::S_IRWXO) {
+                Ok(fd) => Some(fd),
+                Err(_) => {
+                    eprintln!("no such file or directory: {filename}");
+                    None
                 }
-            },
+            }
         };
 
         let pgid;
-        // create first process
-        match fork_exec(Pid::from_raw(0), cmd[0].0, &cmd[0].1, None, output) {
+        let mut input_file = None;
+        let mut output_file = None;
+
+        let mut p = pipe().unwrap();
+        let mut input = Some(p.0);
+        let mut output = Some(p.1);
+
+        let mut pids = HashMap::new();
+        let mut pipes: Vec<Option<i32>> = vec![];
+
+        if !cmds[0].2.is_empty() {
+            match file_open(cmds[0].2, fcntl::OFlag::O_RDONLY) {
+                Some(fd) => {
+                    pipes.push(Some(fd));
+                    input_file = Some(fd);
+                }
+                None => {
+                    return false;
+                }
+            }
+        }
+        if !cmds[0].3.is_empty() {
+            match file_open(cmds[0].3, fcntl::OFlag::O_WRONLY) {
+                Some(fd) => {
+                    pipes.push(Some(fd));
+                    output_file = Some(fd);
+                }
+                None => {
+                    return false;
+                }
+            }
+        }
+
+        match fork_exec(
+            Pid::from_raw(0),
+            cmds[0].0,
+            &cmds[0].1,
+            if input_file != None { input_file } else { None },
+            if output_file != None {
+                output_file
+            } else if cmds.len() > 1 {
+                output
+            } else {
+                None
+            },
+        ) {
             Ok(child) => {
                 pgid = child;
             }
             Err(e) => {
-                eprint!("fail to create process: {e}");
+                eprintln!("failed to create process: {e}");
                 return false;
             }
         }
@@ -419,24 +456,73 @@ impl Worker {
             state: ProcState::Run,
             pgid,
         };
-        let mut pids = HashMap::new();
         pids.insert(pgid, info.clone());
 
-        if cmd.len() == 2 {
-            // create second process
-            match fork_exec(pgid, cmd[1].0, &cmd[1].1, input, None) {
+        for (n, cmd) in cmds.iter().enumerate() {
+            if n == 0 {
+                continue;
+            }
+            input_file = None;
+            output_file = None;
+
+            p = pipe().unwrap();
+            output = Some(p.1);
+
+            let (input_filename, output_filename) = (cmd.2, cmd.3);
+
+            if !input_filename.is_empty() {
+                match file_open(cmd.2, fcntl::OFlag::O_RDONLY) {
+                    Some(fd) => {
+                        pipes.push(Some(fd));
+                        input_file = Some(fd);
+                    }
+                    None => {
+                        return false;
+                    }
+                }
+            }
+            if !output_filename.is_empty() {
+                match file_open(cmd.3, fcntl::OFlag::O_CREAT | fcntl::OFlag::O_RDWR) {
+                    Some(fd) => {
+                        pipes.push(Some(fd));
+                        output_file = Some(fd);
+                    }
+                    None => {
+                        return false;
+                    }
+                }
+            } else if n == cmds.len() - 1 {
+                output = None;
+            }
+
+            match fork_exec(
+                pgid,
+                cmd.0,
+                &cmd.1,
+                if input_file != None {
+                    input_file
+                } else {
+                    input
+                },
+                if output_file != None {
+                    output_file
+                } else {
+                    output
+                },
+            ) {
                 Ok(child) => {
-                    pids.insert(child, info);
+                    pids.insert(child, info.clone());
                 }
                 Err(e) => {
                     eprint!("fail to create process: {e}");
                     return false;
                 }
             }
+
+            input = Some(p.0);
         }
 
-        std::mem::drop(cleanup_pipe); // close pipe
-
+        std::mem::drop(cleanup_pipe(pipes)); // close pipes
         self.fg = Some(pgid);
         self.insert_job(job_id, pgid, pids, line);
         tcsetpgrp(libc::STDIN_FILENO, pgid).unwrap();
@@ -445,7 +531,11 @@ impl Worker {
     }
 
     // return whethre the command is built-in or not
-    fn built_in_cmd(&mut self, cmd: &[(&str, Vec<&str>)], shell_tx: &SyncSender<ShellMsg>) -> bool {
+    fn built_in_cmd(
+        &mut self,
+        cmd: &[(&str, Vec<&str>, &str, &str)],
+        shell_tx: &SyncSender<ShellMsg>,
+    ) -> bool {
         if cmd.len() > 1 {
             return false; // built-in command pipe is not supported
         }
@@ -615,18 +705,51 @@ fn parse_pipe(line: &str) -> Vec<&str> {
     cmds
 }
 
-type CmdResult<'a> = Result<Vec<(&'a str, Vec<&'a str>)>, DynError>;
+fn parse_redirect(line: &str) -> Result<(&str, &str, &str), DynError> {
+    let mut input = "";
+    let mut output = "";
+    let mut cmds = "";
+
+    let mut tokens: Vec<&str> = line.split(&['>', '<'][..]).collect();
+    if tokens.len() > 2 {
+        return Err("too many redirect".into());
+    } else if tokens.len() == 1 {
+        cmds = line;
+    }
+
+    tokens = line.split('>').collect();
+    if tokens.len() > 2 {
+        return Err("too many redirect".into());
+    } else if tokens.len() == 2 {
+        (cmds, output) = (tokens[0], tokens[1]);
+    }
+
+    tokens = line.split('<').collect();
+    if tokens.len() > 2 {
+        return Err("too many redirect".into());
+    } else if tokens.len() == 2 {
+        (cmds, input) = (tokens[0], tokens[1]);
+    }
+
+    if cmds.is_empty() {
+        Err("empty command".into())
+    } else {
+        Ok((cmds, input, output))
+    }
+}
+type CmdResult<'a> = Result<Vec<(&'a str, Vec<&'a str>, &'a str, &'a str)>, DynError>;
 
 fn parse_cmd(line: &str) -> CmdResult {
-    let cmds = parse_pipe(line);
-    if cmds.is_empty() {
+    let parts = parse_pipe(line);
+    if parts.is_empty() {
         return Err("empty command".into());
     }
 
     let mut result = Vec::new();
-    for cmd in cmds {
+    for part in parts {
+        let (cmd, input, output) = parse_redirect(part)?;
         let (filename, args) = parse_cmd_one(cmd)?;
-        result.push((filename, args));
+        result.push((filename, args, input, output));
     }
 
     Ok(result)
